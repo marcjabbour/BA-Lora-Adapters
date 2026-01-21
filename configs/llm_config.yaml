@@ -1,0 +1,24 @@
+# LLM Provider Configuration for Step 2 Tagging
+
+# Primary provider (openai, anthropic, local)
+provider: openai
+
+# Provider-specific settings
+openai:
+  model: gpt-4o
+  api_key_env: OPENAI_API_KEY
+
+anthropic:
+  model: claude-sonnet-4-20250514
+  api_key_env: ANTHROPIC_API_KEY
+
+local:
+  base_url: http://localhost:8000/v1
+  model: meta-llama/Llama-3.1-8B-Instruct
+
+# Generation parameters
+temperature: 0.1
+max_tokens: 4096
+
+# Rewrite threshold (1-10 scale)
+rewrite_threshold: 5

@@ -1,0 +1,2 @@
+# Tagging Prompt Template
+# TODO: Implement full prompt for LLM-based quality assessment and rewriting
