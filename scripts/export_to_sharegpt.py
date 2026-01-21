@@ -20,8 +20,157 @@ Algorithm:
 """
 
 import argparse
+import json
 import sys
 from pathlib import Path
+from typing import Optional
+
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from src.models.tagged import TaggedTranscript, TaggedTurn
+from src.models.sharegpt import ShareGPTMessage, ShareGPTRecord, Metadata
+from src.utils.logging_utils import setup_logging
+
+
+def convert_transcript_to_sharegpt(
+    transcript: TaggedTranscript,
+    logger,
+) -> list[ShareGPTRecord]:
+    """
+    Convert a tagged transcript to ShareGPT format.
+
+    Creates one record per assistant turn with cumulative conversation history.
+
+    Args:
+        transcript: The tagged transcript to convert
+        logger: Logger instance
+
+    Returns:
+        List of ShareGPT records (one per assistant turn)
+    """
+    records: list[ShareGPTRecord] = []
+    history: list[ShareGPTMessage] = []
+    assistant_turn_index = 0
+
+    for turn in transcript.turns:
+        if turn.role == "user":
+            # Add user message to history
+            history.append(ShareGPTMessage(from_="human", value=turn.text))  # type: ignore[call-arg]
+
+        elif turn.role == "assistant":
+            assistant_turn_index += 1
+
+            # Skip if no human message in history yet
+            # (can't train on assistant-first without context)
+            has_human_in_history = any(msg.from_ == "human" for msg in history)
+            if not has_human_in_history:
+                # Still need to add this assistant turn to history for future records
+                history.append(ShareGPTMessage(from_="gpt", value=turn.text))  # type: ignore[call-arg]
+                logger.debug(
+                    f"Skipping assistant turn {assistant_turn_index} in "
+                    f"{transcript.conversation_id}: no human message yet"
+                )
+                continue
+
+            # Determine which text to use (rewrite or original)
+            used_rewrite = False
+            if turn.tags and turn.tags.rewrite_needed and turn.tags.rewrite:
+                text_to_use = turn.tags.rewrite
+                used_rewrite = True
+            else:
+                text_to_use = turn.text
+
+            # Create the assistant message
+            assistant_message = ShareGPTMessage(from_="gpt", value=text_to_use)  # type: ignore[call-arg]
+
+            # Build the conversation: history + current assistant message
+            conversations = [msg.model_copy() for msg in history]
+            conversations.append(assistant_message)
+
+            # Create metadata for traceability
+            metadata = Metadata(
+                conversation_id=transcript.conversation_id,
+                assistant_turn_index=assistant_turn_index,
+                used_rewrite=used_rewrite,
+            )
+
+            # Create the ShareGPT record
+            record = ShareGPTRecord(
+                conversations=conversations,
+                meta=metadata,  # type: ignore[call-arg]
+            )
+            records.append(record)
+
+            # Add to history for future records (use the chosen text)
+            history.append(assistant_message)
+
+    return records
+
+
+def process_file(
+    input_path: Path,
+    logger,
+) -> tuple[list[ShareGPTRecord], int, int]:
+    """
+    Process a single tagged transcript file.
+
+    Args:
+        input_path: Path to the tagged transcript JSON file
+        logger: Logger instance
+
+    Returns:
+        Tuple of (records, success_count, error_count)
+    """
+    try:
+        # Load tagged transcript
+        with open(input_path) as f:
+            data = json.load(f)
+        transcript = TaggedTranscript(**data)
+
+        logger.debug(f"Processing {transcript.conversation_id} ({len(transcript.turns)} turns)")
+
+        # Convert to ShareGPT format
+        records = convert_transcript_to_sharegpt(transcript, logger)
+
+        logger.debug(f"Generated {len(records)} ShareGPT records from {transcript.conversation_id}")
+
+        return records, 1, 0
+
+    except Exception as e:
+        logger.error(f"Failed to process {input_path.name}: {e}")
+        return [], 0, 1
+
+
+def write_output_json(
+    records: list[ShareGPTRecord],
+    output_path: Path,
+    logger,
+) -> None:
+    """Write records as a single JSON array."""
+    # Serialize with proper aliases (_meta, from)
+    serialized = [
+        json.loads(record.model_dump_json(by_alias=True))
+        for record in records
+    ]
+
+    with open(output_path, "w") as f:
+        json.dump(serialized, f, indent=2)
+
+    logger.info(f"Wrote {len(records)} records to {output_path}")
+
+
+def write_output_jsonl(
+    records: list[ShareGPTRecord],
+    output_path: Path,
+    logger,
+) -> None:
+    """Write records as JSONL (one record per line)."""
+    with open(output_path, "w") as f:
+        for record in records:
+            f.write(record.model_dump_json(by_alias=True) + "\n")
+
+    logger.info(f"Wrote {len(records)} records to {output_path}")
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -64,13 +213,58 @@ def main() -> int:
     parser = create_parser()
     args = parser.parse_args()
 
-    # TODO: Implement export logic
-    print(f"Input: {args.input}")
-    print(f"Output: {args.output}")
-    print(f"Format: {args.format}")
-    print("Export not yet implemented.")
+    logger = setup_logging(verbose=args.verbose, name="exporting")
 
-    return 0
+    # Validate input directory
+    if not args.input.exists():
+        logger.error(f"Input directory not found: {args.input}")
+        return 1
+
+    # Collect input files
+    if args.input.is_file():
+        input_files = [args.input]
+    else:
+        input_files = sorted(args.input.glob("*.json"))
+
+    if not input_files:
+        logger.error(f"No JSON files found in {args.input}")
+        return 1
+
+    logger.info(f"Processing {len(input_files)} files")
+
+    # Process all files and collect records
+    all_records: list[ShareGPTRecord] = []
+    total_success = 0
+    total_errors = 0
+
+    for input_path in input_files:
+        records, success, errors = process_file(input_path, logger)
+        all_records.extend(records)
+        total_success += success
+        total_errors += errors
+
+    if not all_records:
+        logger.error("No records generated")
+        return 1
+
+    # Create output directory
+    args.output.mkdir(parents=True, exist_ok=True)
+
+    # Write output
+    if args.format == "json":
+        output_path = args.output / "sharegpt_dataset.json"
+        write_output_json(all_records, output_path, logger)
+    else:
+        output_path = args.output / "sharegpt_dataset.jsonl"
+        write_output_jsonl(all_records, output_path, logger)
+
+    # Report results
+    logger.info(
+        f"Completed: {total_success} files processed, {total_errors} errors, "
+        f"{len(all_records)} total training records"
+    )
+
+    return 0 if total_errors == 0 else 1
 
 
 if __name__ == "__main__":
