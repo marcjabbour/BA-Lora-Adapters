@@ -4,7 +4,8 @@ Unit tests for Step 3: Exporting to ShareGPT format
 Tests cover:
 - ShareGPT format generation
 - Cumulative history building
-- Rewrite usage logic
+- Skipping turns with rewrite_needed=true (not used as training targets)
+- Rewrite in history for subsequent records
 - Skipping assistant-first turns
 - JSON/JSONL serialization
 """
@@ -96,8 +97,8 @@ class TestConvertTranscriptToShareGPT:
         assert record.meta.assistant_turn_index == 2
         assert record.meta.used_rewrite is False
 
-    def test_rewrite_is_used_when_needed(self, logger):
-        """Test that rewrite is used when rewrite_needed=true and rewrite exists."""
+    def test_rewrite_needed_turn_is_skipped(self, logger):
+        """Test that turn with rewrite_needed=true is skipped (no record created)."""
         transcript = create_tagged_transcript([
             {"role": "user", "text": "Hi"},
             {"role": "assistant", "text": "what do you want", "turnCount": 2, "tags": {
@@ -108,10 +109,8 @@ class TestConvertTranscriptToShareGPT:
 
         records = convert_transcript_to_sharegpt(transcript, logger)
 
-        assert len(records) == 1
-        # Should use the rewrite, not original text
-        assert records[0].conversations[1].value == "Hello! How can I assist you today?"
-        assert records[0].meta.used_rewrite is True
+        # No record should be created for rewrite_needed turn
+        assert len(records) == 0
 
     def test_original_used_when_rewrite_not_needed(self, logger):
         """Test that original text is used when rewrite_needed=false."""
@@ -128,8 +127,8 @@ class TestConvertTranscriptToShareGPT:
         assert records[0].conversations[1].value == "Hello, how can I help?"
         assert records[0].meta.used_rewrite is False
 
-    def test_original_used_when_rewrite_missing(self, logger):
-        """Test that original is used when rewrite_needed=true but rewrite is None."""
+    def test_rewrite_needed_skipped_even_when_rewrite_missing(self, logger):
+        """Test that turn is skipped when rewrite_needed=true even if rewrite is None."""
         transcript = create_tagged_transcript([
             {"role": "user", "text": "Hi"},
             {"role": "assistant", "text": "okay", "turnCount": 2, "tags": {
@@ -140,10 +139,59 @@ class TestConvertTranscriptToShareGPT:
 
         records = convert_transcript_to_sharegpt(transcript, logger)
 
+        # Still skipped - rewrite_needed=true means it's not suitable as training target
+        assert len(records) == 0
+
+    def test_rewrite_in_history_for_subsequent_turns(self, logger):
+        """Test that rewrite appears in history for turns following a skipped turn."""
+        transcript = create_tagged_transcript([
+            {"role": "user", "text": "Hi"},
+            {"role": "assistant", "text": "what", "turnCount": 2, "tags": {
+                "turn_score": 3, "quality_labels": [], "issues": ["abrupt"],
+                "rewrite_needed": True, "rewrite": "Hello, how can I help?"
+            }},
+            {"role": "user", "text": "What's the weather?"},
+            {"role": "assistant", "text": "It's sunny today!", "turnCount": 4, "tags": {
+                "turn_score": 8, "quality_labels": ["helpful"], "issues": [], "rewrite_needed": False
+            }},
+        ])
+
+        records = convert_transcript_to_sharegpt(transcript, logger)
+
+        # Only one record (turn 2 skipped, turn 4 creates record)
         assert len(records) == 1
-        # Falls back to original since rewrite is None
-        assert records[0].conversations[1].value == "okay"
-        assert records[0].meta.used_rewrite is False
+
+        record = records[0]
+        # History should contain: human("Hi"), gpt("Hello, how can I help?"), human("What's the weather?"), gpt("It's sunny!")
+        assert len(record.conversations) == 4
+        assert record.conversations[0].value == "Hi"
+        assert record.conversations[1].value == "Hello, how can I help?"  # The rewrite, not "what"
+        assert record.conversations[2].value == "What's the weather?"
+        assert record.conversations[3].value == "It's sunny today!"
+        assert record.meta.assistant_turn_index == 2
+
+    def test_original_in_history_when_rewrite_missing(self, logger):
+        """Test that original text is used in history when rewrite_needed but no rewrite provided."""
+        transcript = create_tagged_transcript([
+            {"role": "user", "text": "Hi"},
+            {"role": "assistant", "text": "what", "turnCount": 2, "tags": {
+                "turn_score": 3, "quality_labels": [], "issues": ["abrupt"],
+                "rewrite_needed": True, "rewrite": None  # No rewrite available
+            }},
+            {"role": "user", "text": "What's the weather?"},
+            {"role": "assistant", "text": "It's sunny today!", "turnCount": 4, "tags": {
+                "turn_score": 8, "quality_labels": ["helpful"], "issues": [], "rewrite_needed": False
+            }},
+        ])
+
+        records = convert_transcript_to_sharegpt(transcript, logger)
+
+        # Only one record (turn 2 skipped)
+        assert len(records) == 1
+
+        record = records[0]
+        # Falls back to original "what" since no rewrite exists
+        assert record.conversations[1].value == "what"
 
     def test_skips_assistant_first_turn(self, logger):
         """Test that first assistant turn is skipped if no human message yet."""
@@ -310,8 +358,8 @@ class TestShareGPTRecordFormat:
         assert data["_meta"]["assistant_turn_index"] == 1
         assert data["_meta"]["used_rewrite"] is False
 
-    def test_history_includes_rewritten_text(self, logger):
-        """Test that history uses rewritten text for subsequent records."""
+    def test_history_includes_rewritten_text_for_skipped_turns(self, logger):
+        """Test that history uses rewritten text from skipped turns."""
         transcript = create_tagged_transcript([
             {"role": "user", "text": "Hi"},
             {"role": "assistant", "text": "what", "turnCount": 2, "tags": {
@@ -326,9 +374,42 @@ class TestShareGPTRecordFormat:
 
         records = convert_transcript_to_sharegpt(transcript, logger)
 
-        assert len(records) == 2
+        # Only 1 record - first assistant turn is skipped (rewrite_needed=true)
+        assert len(records) == 1
 
-        # Second record's history should contain the rewritten version
-        second_record = records[1]
+        # Record's history should contain the rewritten version from the skipped turn
+        record = records[0]
         # Conversation: human("Hi"), gpt("Hello, how can I help?"), human("What's the time?"), gpt("It's noon.")
-        assert second_record.conversations[1].value == "Hello, how can I help?"
+        assert len(record.conversations) == 4
+        assert record.conversations[1].value == "Hello, how can I help?"
+
+    def test_multiple_skipped_turns_in_sequence(self, logger):
+        """Test multiple consecutive rewrite_needed turns are all skipped."""
+        transcript = create_tagged_transcript([
+            {"role": "user", "text": "Hi"},
+            {"role": "assistant", "text": "what", "turnCount": 2, "tags": {
+                "turn_score": 3, "quality_labels": [], "issues": [],
+                "rewrite_needed": True, "rewrite": "Hello!"
+            }},
+            {"role": "user", "text": "Help me"},
+            {"role": "assistant", "text": "why", "turnCount": 4, "tags": {
+                "turn_score": 2, "quality_labels": [], "issues": [],
+                "rewrite_needed": True, "rewrite": "I'd be happy to help!"
+            }},
+            {"role": "user", "text": "What time is it?"},
+            {"role": "assistant", "text": "It's 3pm.", "turnCount": 6, "tags": {
+                "turn_score": 8, "quality_labels": [], "issues": [], "rewrite_needed": False
+            }},
+        ])
+
+        records = convert_transcript_to_sharegpt(transcript, logger)
+
+        # Only 1 record - turns 2 and 4 are both skipped
+        assert len(records) == 1
+
+        record = records[0]
+        # History should have all rewrites from skipped turns
+        assert len(record.conversations) == 6
+        assert record.conversations[1].value == "Hello!"  # Rewrite from turn 2
+        assert record.conversations[3].value == "I'd be happy to help!"  # Rewrite from turn 4
+        assert record.conversations[5].value == "It's 3pm."  # The training target

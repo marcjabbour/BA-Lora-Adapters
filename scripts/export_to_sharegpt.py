@@ -12,10 +12,11 @@ Algorithm:
     2. For each turn:
        - If user: add to history as {"from": "human", "value": text}
        - If assistant:
-         - If rewrite_needed=true and rewrite exists, use rewrite
          - Skip if no human message yet in history
-         - Create ShareGPT record: history + [assistant message]
-         - Add to history for future records
+         - If rewrite_needed=true: add rewrite to history, skip record creation
+           (last gpt message is the SFT target; we don't train on poor responses)
+         - Otherwise: create ShareGPT record with history + [assistant message]
+         - Add assistant message to history for future records
     3. Output as JSON/JSONL
 """
 
@@ -73,16 +74,22 @@ def convert_transcript_to_sharegpt(
                 )
                 continue
 
-            # Determine which text to use (rewrite or original)
-            used_rewrite = False
-            if turn.tags and turn.tags.rewrite_needed and turn.tags.rewrite:
-                text_to_use = turn.tags.rewrite
-                used_rewrite = True
-            else:
-                text_to_use = turn.text
+            # Check if this turn has rewrite_needed=true
+            # In ShareGPT SFT, the last gpt message is the supervised target.
+            # We don't want to train on poor-quality responses, so skip creating
+            # a record. But we still add the rewrite to history for future turns.
+            if turn.tags and turn.tags.rewrite_needed:
+                # Use rewrite in history if available, else fallback to original
+                text_for_history = turn.tags.rewrite if turn.tags.rewrite else turn.text
+                history.append(ShareGPTMessage(from_="gpt", value=text_for_history))  # type: ignore[call-arg]
+                logger.debug(
+                    f"Skipping assistant turn {assistant_turn_index} in "
+                    f"{transcript.conversation_id}: rewrite_needed=true (not used as training target)"
+                )
+                continue
 
-            # Create the assistant message
-            assistant_message = ShareGPTMessage(from_="gpt", value=text_to_use)  # type: ignore[call-arg]
+            # Normal case: use original text, create a training record
+            assistant_message = ShareGPTMessage(from_="gpt", value=turn.text)  # type: ignore[call-arg]
 
             # Build the conversation: history + current assistant message
             conversations = [msg.model_copy() for msg in history]
@@ -92,7 +99,7 @@ def convert_transcript_to_sharegpt(
             metadata = Metadata(
                 conversation_id=transcript.conversation_id,
                 assistant_turn_index=assistant_turn_index,
-                used_rewrite=used_rewrite,
+                used_rewrite=False,  # Only high-quality originals become targets
             )
 
             # Create the ShareGPT record
@@ -102,7 +109,7 @@ def convert_transcript_to_sharegpt(
             )
             records.append(record)
 
-            # Add to history for future records (use the chosen text)
+            # Add to history for future records
             history.append(assistant_message)
 
     return records
