@@ -36,17 +36,16 @@ Example (one record per assistant turn, cumulative history):
 ]
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Literal
 
 
 class ShareGPTMessage(BaseModel):
     """A single message in ShareGPT format."""
+    model_config = ConfigDict(populate_by_name=True)
+
     from_: Literal["gpt", "human"] = Field(alias="from")
     value: str
-
-    class Config:
-        populate_by_name = True
 
 
 class Metadata(BaseModel):
@@ -58,8 +57,7 @@ class Metadata(BaseModel):
 
 class ShareGPTRecord(BaseModel):
     """A single ShareGPT training record."""
-    conversations: list[ShareGPTMessage]
-    _meta: Metadata = Field(alias="_meta")
+    model_config = ConfigDict(populate_by_name=True)
 
-    class Config:
-        populate_by_name = True
+    conversations: list[ShareGPTMessage]
+    meta: Metadata = Field(alias="_meta")

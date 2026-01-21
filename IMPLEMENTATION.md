@@ -282,7 +282,7 @@ Metadata {
 
 ### Step 1: Sanitization (`scripts/sanitize_transcripts.py`)
 
-**Status:** ⬜ Not implemented
+**Status:** ✅ Implemented
 
 **Input**: Directory of raw JSON transcripts with fields: `human_transcript`, `speaker_role`, `start_timestamp_ms`
 
@@ -365,7 +365,7 @@ python scripts/export_to_sharegpt.py \
 | `src/models/sharegpt.py` | Pydantic model for Step 3 | ✅ |
 | `src/llm/client.py` | LLM client abstraction | ⬜ |
 | `src/utils/logging_utils.py` | Logging configuration | ✅ |
-| `scripts/sanitize_transcripts.py` | Step 1 CLI | ⬜ |
+| `scripts/sanitize_transcripts.py` | Step 1 CLI | ✅ |
 | `scripts/tag_transcripts.py` | Step 2 CLI | ⬜ |
 | `scripts/export_to_sharegpt.py` | Step 3 CLI | ⬜ |
 
