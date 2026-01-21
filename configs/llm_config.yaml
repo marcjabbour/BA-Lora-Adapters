@@ -21,4 +21,6 @@ temperature: 0.1
 max_tokens: 4096
 
 # Rewrite threshold (1-10 scale)
-rewrite_threshold: 5
+# Turns scoring at or below this value will trigger a rewrite
+# Can be overridden via REWRITE_THRESHOLD env var
+rewrite_threshold: 6

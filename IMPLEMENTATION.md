@@ -389,8 +389,9 @@ Filter turns where `human_transcript` matches:
 - Empty/whitespace-only strings
 
 ### Rewrite Threshold (Step 2)
-- Score below **5** (on 1-10 scale) triggers a rewrite
-- LLM evaluates: clarity, helpfulness, professionalism, empathy
+- Score at or below **6** (on 1-10 scale) triggers a rewrite
+- Configurable via `REWRITE_THRESHOLD` env var or `configs/llm_config.yaml`
+- LLM evaluates: tone, clarity, proactiveness, understanding
 
 ### LLM Config (Step 2)
 ```yaml
@@ -398,4 +399,13 @@ provider: openai
 model: gpt-4o
 temperature: 0.1
 max_tokens: 4096
+rewrite_threshold: 6
+```
+
+### Future: Retag Script
+A utility script can be created to re-process existing tagged files with a different threshold:
+```bash
+python scripts/retag_transcripts.py \
+  --input data/Step-2-Tagging/output/ \
+  --threshold 7  # Regenerate rewrites for all turns scoring <= 7
 ```

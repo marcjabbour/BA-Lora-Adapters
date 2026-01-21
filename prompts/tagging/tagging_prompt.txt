@@ -37,7 +37,7 @@ Common issues include:
 
 ## Rewrite Rules
 
-If a turn scores below 5, provide a rewrite that:
+If a turn scores 6 or below, provide a rewrite that:
 - Directly addresses the specific issues identified for that turn (e.g., if "no_acknowledgment" was flagged, add an acknowledgment; if "abrupt" was flagged, soften the tone)
 - Maintains the same factual content and intent
 - Improves tone, clarity, proactiveness, and understanding

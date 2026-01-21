@@ -156,28 +156,28 @@ class TestExtractJsonFromResponse:
 
 
 class TestRewriteThresholdLogic:
-    """Tests for rewrite threshold logic."""
+    """Tests for rewrite threshold logic (score <= threshold triggers rewrite)."""
 
     def test_score_below_threshold_needs_rewrite(self):
         """Score below threshold should trigger rewrite."""
-        threshold = 5
+        threshold = 6
 
-        for score in [1, 2, 3, 4]:
-            assert score < threshold
+        for score in [1, 2, 3, 4, 5]:
+            assert score <= threshold
 
-    def test_score_at_threshold_no_rewrite(self):
-        """Score at threshold should not trigger rewrite."""
-        threshold = 5
-        score = 5
+    def test_score_at_threshold_needs_rewrite(self):
+        """Score at threshold should trigger rewrite."""
+        threshold = 6
+        score = 6
 
-        assert not (score < threshold)
+        assert score <= threshold
 
     def test_score_above_threshold_no_rewrite(self):
         """Score above threshold should not trigger rewrite."""
-        threshold = 5
+        threshold = 6
 
-        for score in [6, 7, 8, 9, 10]:
-            assert not (score < threshold)
+        for score in [7, 8, 9, 10]:
+            assert not (score <= threshold)
 
 
 class TestTaggedModels:

@@ -18,6 +18,7 @@ Operations:
 
 import argparse
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -101,7 +102,7 @@ def tag_transcript(
         transcript: The sanitized transcript to tag
         client: LLM client instance
         system_prompt: The tagging prompt
-        rewrite_threshold: Score below which rewrites are needed
+        rewrite_threshold: Score at or below which rewrites are needed
         temperature: LLM temperature setting
         max_tokens: Max tokens for LLM response
         logger: Logger instance
@@ -152,8 +153,8 @@ def tag_transcript(
             eval_data = evaluations.get(turn.turnCount, {})
             turn_score = eval_data.get("turn_score", 5)
 
-            # Determine if rewrite is needed based on threshold
-            rewrite_needed = turn_score < rewrite_threshold
+            # Determine if rewrite is needed based on threshold (score <= threshold)
+            rewrite_needed = turn_score <= rewrite_threshold
             rewrite = eval_data.get("rewrite") if rewrite_needed else None
 
             tags = TurnTags(
@@ -334,7 +335,13 @@ def main() -> int:
     # Get generation parameters
     temperature = config.get("temperature", 0.1)
     max_tokens = config.get("max_tokens", 4096)
-    rewrite_threshold = config.get("rewrite_threshold", 5)
+
+    # Rewrite threshold: env var takes precedence over config
+    rewrite_threshold_env = os.environ.get("REWRITE_THRESHOLD")
+    if rewrite_threshold_env is not None:
+        rewrite_threshold = int(rewrite_threshold_env)
+    else:
+        rewrite_threshold = config.get("rewrite_threshold", 6)
 
     # Create LLM client
     try:
@@ -366,7 +373,7 @@ def main() -> int:
         input_files = input_files[: args.limit]
 
     logger.info(f"Processing {len(input_files)} files")
-    logger.info(f"Rewrite threshold: score < {rewrite_threshold}")
+    logger.info(f"Rewrite threshold: score <= {rewrite_threshold}")
 
     # Process files
     success_count = 0
