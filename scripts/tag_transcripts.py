@@ -23,6 +23,9 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import yaml
 from dotenv import load_dotenv
 from tqdm import tqdm
