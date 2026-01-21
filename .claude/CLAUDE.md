@@ -80,7 +80,7 @@ We're building this step-by-step in order:
 |------|------|--------|
 | 1 | Sanitization | ✅ Complete |
 | 2 | Tagging (LLM) | ✅ Complete |
-| 3 | Exporting (ShareGPT) | ⬜ Not started |
+| 3 | Exporting (ShareGPT) | ✅ Complete |
 | 4 | Training (Llama-Factory) | ⬜ Future |
 | 5 | Serving (vLLM) | ⬜ Future |
 
