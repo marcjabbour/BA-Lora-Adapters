@@ -282,7 +282,7 @@ Metadata {
 
 ### Step 1: Sanitization (`scripts/sanitize_transcripts.py`)
 
-**Status:** ⬜ Not implemented
+**Status:** ✅ Implemented
 
 **Input**: Directory of raw JSON transcripts with fields: `human_transcript`, `speaker_role`, `start_timestamp_ms`
 
@@ -303,7 +303,7 @@ python scripts/sanitize_transcripts.py \
 
 ### Step 2: Tagging (`scripts/tag_transcripts.py`)
 
-**Status:** ⬜ Not implemented
+**Status:** ✅ Implemented
 
 **Input**: Sanitized transcripts from Step 1
 
@@ -328,20 +328,30 @@ python scripts/tag_transcripts.py \
 
 ### Step 3: Exporting (`scripts/export_to_sharegpt.py`)
 
-**Status:** ⬜ Not implemented
+**Status:** ✅ Implemented
 
 **Input**: Tagged transcripts from Step 2
 
-**Algorithm** (per user specification):
+**Algorithm**:
 1. Initialize empty `records` and `history` lists
 2. For each turn:
    - If `user`: add to history as `{"from": "human", "value": text}`
    - If `assistant`:
-     - If `rewrite_needed=true` and rewrite exists, use rewrite
      - Skip if no human message yet in history
-     - Create ShareGPT record: `history + [assistant message]`
-     - Add to history for future records
+     - If `rewrite_needed=true`: add rewrite to history, **skip record creation**
+     - Otherwise: create ShareGPT record with `history + [assistant message]`
+     - Add assistant message to history for future records
 3. Output as JSON/JSONL
+
+**Design Decision - Skipping Turns with rewrite_needed=true:**
+
+In ShareGPT turn-by-turn SFT, the last `gpt` message is the supervised target. Turns marked with `rewrite_needed=true` have poor-quality original responses that we don't want to use as training targets. Therefore:
+
+1. **No record created** - We skip creating a ShareGPT record for these turns
+2. **Rewrite used in history** - The rewrite (corrected version) is added to conversation history so future turns see the ideal conversational flow
+3. **Rationale** - SFT teaches "what good looks like"; including corrected context produces more coherent training examples
+
+This means only high-quality assistant responses become supervised targets, while the conversation history reflects what the ideal conversation flow should have been.
 
 **CLI**:
 ```bash
@@ -359,14 +369,14 @@ python scripts/export_to_sharegpt.py \
 | `requirements.txt` | Dependencies (pydantic, anthropic, openai, etc.) | ✅ |
 | `.env.example` | Template for API keys | ✅ |
 | `configs/llm_config.yaml` | LLM provider configuration | ✅ |
-| `prompts/tagging/tagging_prompt.txt` | Tagging prompt template | ⬜ |
+| `prompts/tagging/tagging_prompt.txt` | Tagging prompt template | ✅ |
 | `src/models/sanitized.py` | Pydantic model for Step 1 | ✅ |
 | `src/models/tagged.py` | Pydantic model for Step 2 | ✅ |
 | `src/models/sharegpt.py` | Pydantic model for Step 3 | ✅ |
-| `src/llm/client.py` | LLM client abstraction | ⬜ |
+| `src/llm/client.py` | LLM client abstraction | ✅ |
 | `src/utils/logging_utils.py` | Logging configuration | ✅ |
-| `scripts/sanitize_transcripts.py` | Step 1 CLI | ⬜ |
-| `scripts/tag_transcripts.py` | Step 2 CLI | ⬜ |
+| `scripts/sanitize_transcripts.py` | Step 1 CLI | ✅ |
+| `scripts/tag_transcripts.py` | Step 2 CLI | ✅ |
 | `scripts/export_to_sharegpt.py` | Step 3 CLI | ⬜ |
 
 ---
@@ -389,8 +399,9 @@ Filter turns where `human_transcript` matches:
 - Empty/whitespace-only strings
 
 ### Rewrite Threshold (Step 2)
-- Score below **5** (on 1-10 scale) triggers a rewrite
-- LLM evaluates: clarity, helpfulness, professionalism, empathy
+- Score at or below **6** (on 1-10 scale) triggers a rewrite
+- Configurable via `REWRITE_THRESHOLD` env var or `configs/llm_config.yaml`
+- LLM evaluates: tone, clarity, proactiveness, understanding
 
 ### LLM Config (Step 2)
 ```yaml
@@ -398,4 +409,13 @@ provider: openai
 model: gpt-4o
 temperature: 0.1
 max_tokens: 4096
+rewrite_threshold: 6
+```
+
+### Future: Retag Script
+A utility script can be created to re-process existing tagged files with a different threshold:
+```bash
+python scripts/retag_transcripts.py \
+  --input data/Step-2-Tagging/output/ \
+  --threshold 7  # Regenerate rewrites for all turns scoring <= 7
 ```
