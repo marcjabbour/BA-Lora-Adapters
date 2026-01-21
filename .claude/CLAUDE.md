@@ -79,7 +79,7 @@ We're building this step-by-step in order:
 | Step | Name | Status |
 |------|------|--------|
 | 1 | Sanitization | ✅ Complete |
-| 2 | Tagging (LLM) | ⬜ Not started |
+| 2 | Tagging (LLM) | ✅ Complete |
 | 3 | Exporting (ShareGPT) | ⬜ Not started |
 | 4 | Training (Llama-Factory) | ⬜ Future |
 | 5 | Serving (vLLM) | ⬜ Future |

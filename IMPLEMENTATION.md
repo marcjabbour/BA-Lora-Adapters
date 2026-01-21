@@ -303,7 +303,7 @@ python scripts/sanitize_transcripts.py \
 
 ### Step 2: Tagging (`scripts/tag_transcripts.py`)
 
-**Status:** ⬜ Not implemented
+**Status:** ✅ Implemented
 
 **Input**: Sanitized transcripts from Step 1
 
@@ -359,14 +359,14 @@ python scripts/export_to_sharegpt.py \
 | `requirements.txt` | Dependencies (pydantic, anthropic, openai, etc.) | ✅ |
 | `.env.example` | Template for API keys | ✅ |
 | `configs/llm_config.yaml` | LLM provider configuration | ✅ |
-| `prompts/tagging/tagging_prompt.txt` | Tagging prompt template | ⬜ |
+| `prompts/tagging/tagging_prompt.txt` | Tagging prompt template | ✅ |
 | `src/models/sanitized.py` | Pydantic model for Step 1 | ✅ |
 | `src/models/tagged.py` | Pydantic model for Step 2 | ✅ |
 | `src/models/sharegpt.py` | Pydantic model for Step 3 | ✅ |
-| `src/llm/client.py` | LLM client abstraction | ⬜ |
+| `src/llm/client.py` | LLM client abstraction | ✅ |
 | `src/utils/logging_utils.py` | Logging configuration | ✅ |
 | `scripts/sanitize_transcripts.py` | Step 1 CLI | ✅ |
-| `scripts/tag_transcripts.py` | Step 2 CLI | ⬜ |
+| `scripts/tag_transcripts.py` | Step 2 CLI | ✅ |
 | `scripts/export_to_sharegpt.py` | Step 3 CLI | ⬜ |
 
 ---
@@ -389,8 +389,9 @@ Filter turns where `human_transcript` matches:
 - Empty/whitespace-only strings
 
 ### Rewrite Threshold (Step 2)
-- Score below **5** (on 1-10 scale) triggers a rewrite
-- LLM evaluates: clarity, helpfulness, professionalism, empathy
+- Score at or below **6** (on 1-10 scale) triggers a rewrite
+- Configurable via `REWRITE_THRESHOLD` env var or `configs/llm_config.yaml`
+- LLM evaluates: tone, clarity, proactiveness, understanding
 
 ### LLM Config (Step 2)
 ```yaml
@@ -398,4 +399,13 @@ provider: openai
 model: gpt-4o
 temperature: 0.1
 max_tokens: 4096
+rewrite_threshold: 6
+```
+
+### Future: Retag Script
+A utility script can be created to re-process existing tagged files with a different threshold:
+```bash
+python scripts/retag_transcripts.py \
+  --input data/Step-2-Tagging/output/ \
+  --threshold 7  # Regenerate rewrites for all turns scoring <= 7
 ```
