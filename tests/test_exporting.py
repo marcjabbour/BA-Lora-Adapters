@@ -20,7 +20,7 @@ from src.models.tagged import (
     TurnTags,
     ConversationTags,
 )
-from src.models.sharegpt import ShareGPTMessage, ShareGPTRecord, Metadata
+from src.models.sharegpt import ShareGPTMessage, ShareGPTRecord
 
 # Import functions from the exporting script
 import sys
@@ -84,18 +84,25 @@ class TestConvertTranscriptToShareGPT:
 
         records = convert_transcript_to_sharegpt(transcript, logger)
 
-        # First assistant turn is skipped (no human yet)
-        # Second assistant turn creates a record
-        assert len(records) == 1
+        # Both assistant turns create records (empty human prepended for first)
+        assert len(records) == 2
 
-        record = records[0]
-        # Should have: assistant greeting (from history) + user message + assistant response
-        assert len(record.conversations) == 3
-        assert record.conversations[0].from_ == "gpt"
-        assert record.conversations[1].from_ == "human"
-        assert record.conversations[2].from_ == "gpt"
-        assert record.meta.assistant_turn_index == 2
-        assert record.meta.used_rewrite is False
+        # First record: empty human + first assistant
+        record1 = records[0]
+        assert len(record1.conversations) == 2
+        assert record1.conversations[0].from_ == "human"
+        assert record1.conversations[0].value == ""
+        assert record1.conversations[1].from_ == "gpt"
+        assert record1.conversations[1].value == "Hello, how can I help?"
+
+        # Second record: empty human + assistant + user + assistant
+        record2 = records[1]
+        assert len(record2.conversations) == 4
+        assert record2.conversations[0].from_ == "human"
+        assert record2.conversations[0].value == ""
+        assert record2.conversations[1].from_ == "gpt"
+        assert record2.conversations[2].from_ == "human"
+        assert record2.conversations[3].from_ == "gpt"
 
     def test_rewrite_needed_turn_is_skipped(self, logger):
         """Test that turn with rewrite_needed=true is skipped (no record created)."""
@@ -125,7 +132,6 @@ class TestConvertTranscriptToShareGPT:
 
         assert len(records) == 1
         assert records[0].conversations[1].value == "Hello, how can I help?"
-        assert records[0].meta.used_rewrite is False
 
     def test_rewrite_needed_skipped_even_when_rewrite_missing(self, logger):
         """Test that turn is skipped when rewrite_needed=true even if rewrite is None."""
@@ -168,7 +174,6 @@ class TestConvertTranscriptToShareGPT:
         assert record.conversations[1].value == "Hello, how can I help?"  # The rewrite, not "what"
         assert record.conversations[2].value == "What's the weather?"
         assert record.conversations[3].value == "It's sunny today!"
-        assert record.meta.assistant_turn_index == 2
 
     def test_original_in_history_when_rewrite_missing(self, logger):
         """Test that original text is used in history when rewrite_needed but no rewrite provided."""
@@ -193,8 +198,8 @@ class TestConvertTranscriptToShareGPT:
         # Falls back to original "what" since no rewrite exists
         assert record.conversations[1].value == "what"
 
-    def test_skips_assistant_first_turn(self, logger):
-        """Test that first assistant turn is skipped if no human message yet."""
+    def test_prepends_empty_human_for_assistant_first(self, logger):
+        """Test that empty human message is prepended when first turn is assistant."""
         transcript = create_tagged_transcript([
             {"role": "assistant", "text": "Welcome to our service!", "turnCount": 1, "tags": {
                 "turn_score": 8, "quality_labels": [], "issues": [], "rewrite_needed": False
@@ -207,13 +212,19 @@ class TestConvertTranscriptToShareGPT:
 
         records = convert_transcript_to_sharegpt(transcript, logger)
 
-        # Only one record (for the second assistant turn)
-        assert len(records) == 1
-        assert records[0].meta.assistant_turn_index == 2
+        # Two records (one for each assistant turn)
+        assert len(records) == 2
 
-        # But history should include the first assistant message
-        assert len(records[0].conversations) == 3
-        assert records[0].conversations[0].value == "Welcome to our service!"
+        # First record should have empty human prepended
+        assert len(records[0].conversations) == 2
+        assert records[0].conversations[0].from_ == "human"
+        assert records[0].conversations[0].value == ""
+        assert records[0].conversations[1].value == "Welcome to our service!"
+
+        # Second record also has empty human at start
+        assert len(records[1].conversations) == 4
+        assert records[1].conversations[0].from_ == "human"
+        assert records[1].conversations[0].value == ""
 
     def test_cumulative_history(self, logger):
         """Test that history accumulates across turns."""
@@ -245,20 +256,22 @@ class TestConvertTranscriptToShareGPT:
         # Third record: 6 messages (full history)
         assert len(records[2].conversations) == 6
 
-    def test_metadata_tracking(self, logger):
-        """Test that metadata correctly tracks conversation and turn info."""
+    def test_no_metadata_in_output(self, logger):
+        """Test that ShareGPT records don't have metadata field."""
         transcript = create_tagged_transcript([
             {"role": "user", "text": "Hi"},
             {"role": "assistant", "text": "Hello!", "turnCount": 2, "tags": {
                 "turn_score": 8, "quality_labels": [], "issues": [], "rewrite_needed": False
             }},
         ])
-        transcript.conversation_id = "conv_xyz789"
 
         records = convert_transcript_to_sharegpt(transcript, logger)
 
-        assert records[0].meta.conversation_id == "conv_xyz789"
-        assert records[0].meta.assistant_turn_index == 1
+        # Verify record has conversations but no meta
+        data = json.loads(records[0].model_dump_json(by_alias=True))
+        assert "conversations" in data
+        assert "_meta" not in data
+        assert "meta" not in data
 
     def test_empty_transcript(self, logger):
         """Test handling of transcript with no turns."""
@@ -295,37 +308,20 @@ class TestShareGPTModels:
         assert "from_" not in data
 
     def test_sharegpt_record_serialization(self):
-        """Test ShareGPTRecord serializes with '_meta' alias."""
+        """Test ShareGPTRecord serializes correctly without metadata."""
         record = ShareGPTRecord(
             conversations=[
                 ShareGPTMessage(from_="human", value="Hi"),
                 ShareGPTMessage(from_="gpt", value="Hello!"),
             ],
-            meta=Metadata(
-                conversation_id="test123",
-                assistant_turn_index=1,
-                used_rewrite=False,
-            ),
         )
 
         data = json.loads(record.model_dump_json(by_alias=True))
 
-        assert "_meta" in data
-        assert "meta" not in data
-        assert data["_meta"]["conversation_id"] == "test123"
+        assert "conversations" in data
+        assert "_meta" not in data
         assert data["conversations"][0]["from"] == "human"
-
-    def test_metadata_fields(self):
-        """Test Metadata model fields."""
-        meta = Metadata(
-            conversation_id="conv123",
-            assistant_turn_index=5,
-            used_rewrite=True,
-        )
-
-        assert meta.conversation_id == "conv123"
-        assert meta.assistant_turn_index == 5
-        assert meta.used_rewrite is True
+        assert data["conversations"][1]["from"] == "gpt"
 
 
 class TestShareGPTRecordFormat:
@@ -343,20 +339,15 @@ class TestShareGPTRecordFormat:
         records = convert_transcript_to_sharegpt(transcript, logger)
         data = json.loads(records[0].model_dump_json(by_alias=True))
 
-        # Check structure matches expected format
+        # Check structure matches expected format (no metadata)
         assert "conversations" in data
-        assert "_meta" in data
+        assert "_meta" not in data
         assert isinstance(data["conversations"], list)
         assert len(data["conversations"]) == 2
 
         # Check conversation format
         assert data["conversations"][0] == {"from": "human", "value": "What are your hours?"}
         assert data["conversations"][1] == {"from": "gpt", "value": "We're open 9-5!"}
-
-        # Check metadata format
-        assert data["_meta"]["conversation_id"] == "test123"
-        assert data["_meta"]["assistant_turn_index"] == 1
-        assert data["_meta"]["used_rewrite"] is False
 
     def test_history_includes_rewritten_text_for_skipped_turns(self, logger):
         """Test that history uses rewritten text from skipped turns."""

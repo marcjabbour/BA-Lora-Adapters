@@ -30,7 +30,7 @@ from typing import Optional
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.models.tagged import TaggedTranscript, TaggedTurn
-from src.models.sharegpt import ShareGPTMessage, ShareGPTRecord, Metadata
+from src.models.sharegpt import ShareGPTMessage, ShareGPTRecord
 from src.utils.logging_utils import setup_logging
 
 
@@ -62,17 +62,16 @@ def convert_transcript_to_sharegpt(
         elif turn.role == "assistant":
             assistant_turn_index += 1
 
-            # Skip if no human message in history yet
-            # (can't train on assistant-first without context)
+            # ShareGPT format requires the first message to be from "human".
+            # If no human message in history yet, prepend an empty human message.
             has_human_in_history = any(msg.from_ == "human" for msg in history)
             if not has_human_in_history:
-                # Still need to add this assistant turn to history for future records
-                history.append(ShareGPTMessage(from_="gpt", value=turn.text))  # type: ignore[call-arg]
+                empty_human = ShareGPTMessage(from_="human", value="")  # type: ignore[call-arg]
+                history.insert(0, empty_human)
                 logger.debug(
-                    f"Skipping assistant turn {assistant_turn_index} in "
-                    f"{transcript.conversation_id}: no human message yet"
+                    f"Prepending empty human message in {transcript.conversation_id}: "
+                    f"assistant turn {assistant_turn_index} is first"
                 )
-                continue
 
             # Check if this turn has rewrite_needed=true
             # In ShareGPT SFT, the last gpt message is the supervised target.
@@ -95,18 +94,8 @@ def convert_transcript_to_sharegpt(
             conversations = [msg.model_copy() for msg in history]
             conversations.append(assistant_message)
 
-            # Create metadata for traceability
-            metadata = Metadata(
-                conversation_id=transcript.conversation_id,
-                assistant_turn_index=assistant_turn_index,
-                used_rewrite=False,  # Only high-quality originals become targets
-            )
-
             # Create the ShareGPT record
-            record = ShareGPTRecord(
-                conversations=conversations,
-                meta=metadata,  # type: ignore[call-arg]
-            )
+            record = ShareGPTRecord(conversations=conversations)
             records.append(record)
 
             # Add to history for future records
