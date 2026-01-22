@@ -328,20 +328,30 @@ python scripts/tag_transcripts.py \
 
 ### Step 3: Exporting (`scripts/export_to_sharegpt.py`)
 
-**Status:** ⬜ Not implemented
+**Status:** ✅ Implemented
 
 **Input**: Tagged transcripts from Step 2
 
-**Algorithm** (per user specification):
+**Algorithm**:
 1. Initialize empty `records` and `history` lists
 2. For each turn:
    - If `user`: add to history as `{"from": "human", "value": text}`
    - If `assistant`:
-     - If `rewrite_needed=true` and rewrite exists, use rewrite
      - Skip if no human message yet in history
-     - Create ShareGPT record: `history + [assistant message]`
-     - Add to history for future records
+     - If `rewrite_needed=true`: add rewrite to history, **skip record creation**
+     - Otherwise: create ShareGPT record with `history + [assistant message]`
+     - Add assistant message to history for future records
 3. Output as JSON/JSONL
+
+**Design Decision - Skipping Turns with rewrite_needed=true:**
+
+In ShareGPT turn-by-turn SFT, the last `gpt` message is the supervised target. Turns marked with `rewrite_needed=true` have poor-quality original responses that we don't want to use as training targets. Therefore:
+
+1. **No record created** - We skip creating a ShareGPT record for these turns
+2. **Rewrite used in history** - The rewrite (corrected version) is added to conversation history so future turns see the ideal conversational flow
+3. **Rationale** - SFT teaches "what good looks like"; including corrected context produces more coherent training examples
+
+This means only high-quality assistant responses become supervised targets, while the conversation history reflects what the ideal conversation flow should have been.
 
 **CLI**:
 ```bash

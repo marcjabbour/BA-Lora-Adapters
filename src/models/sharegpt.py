@@ -5,7 +5,6 @@ ShareGPTDataset = ShareGPTRecord[]
 
 ShareGPTRecord {
   conversations: Message[]
-  _meta: Metadata
 }
 
 Message {
@@ -13,31 +12,24 @@ Message {
   value: string
 }
 
-Metadata {
-  conversation_id: string
-  assistant_turn_index: int
-  used_rewrite: bool
-}
+Note: ShareGPT format requires the first message to be from "human".
+If the transcript starts with an assistant turn, we prepend an empty human message.
 
 Example (one record per assistant turn, cumulative history):
 [
   {
     "conversations": [
+      {"from": "human", "value": ""},
       {"from": "gpt", "value": "hello this is harper valley national bank..."},
       {"from": "human", "value": "hi my name is michael johnson..."},
       {"from": "gpt", "value": "Great question, Michael! Our branch hours are..."}
-    ],
-    "_meta": {
-      "conversation_id": "6aa47f9fbdab459b",
-      "assistant_turn_index": 2,
-      "used_rewrite": true
-    }
+    ]
   }
 ]
 """
 
 from pydantic import BaseModel, ConfigDict, Field
-from typing import Literal
+from typing import Literal, Optional
 
 
 class ShareGPTMessage(BaseModel):
@@ -48,16 +40,8 @@ class ShareGPTMessage(BaseModel):
     value: str
 
 
-class Metadata(BaseModel):
-    """Metadata for traceability."""
-    conversation_id: str
-    assistant_turn_index: int
-    used_rewrite: bool
-
-
 class ShareGPTRecord(BaseModel):
     """A single ShareGPT training record."""
     model_config = ConfigDict(populate_by_name=True)
 
     conversations: list[ShareGPTMessage]
-    meta: Metadata = Field(alias="_meta")
