@@ -63,6 +63,9 @@ def main():
     logger.info(f"Using training config: {config_path}")
     logger.info(f"Using dataset info: {dataset_info_path}")
 
+    # Get project root directory (parent of scripts/)
+    project_root = Path(__file__).parent.parent
+
     # Set environment variable for LlamaFactory to find dataset_info.json
     # LlamaFactory looks for dataset_info.json in DATASET_DIR
     os.environ["DATASET_DIR"] = str(dataset_info_path.parent)
@@ -76,14 +79,16 @@ def main():
 
     logger.info(f"Running: {' '.join(cmd)}")
     logger.info(f"Dataset directory: {dataset_info_path.parent}")
+    logger.info(f"Working directory: {project_root}")
     logger.info("Training started (this may take several hours on CPU)...")
     logger.info("LlamaFactory will handle model download, data loading, and training")
 
     try:
         # Pass through to llamafactory-cli with environment variable, showing output in real-time
+        # Run from project root so relative paths in config resolve correctly
         env = os.environ.copy()
         env["DATASET_DIR"] = str(dataset_info_path.parent)
-        result = subprocess.run(cmd, check=True, env=env)
+        result = subprocess.run(cmd, check=True, env=env, cwd=str(project_root))
 
         logger.info("✓ Training completed successfully!")
 

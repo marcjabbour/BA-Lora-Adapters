@@ -19,7 +19,7 @@ overwrite_cache: true
 preprocessing_num_workers: 4
 
 ### Output
-output_dir: ../../data/Step-4-Training/output/qwen2-1.5b-lora-hvnb
+output_dir: data/Step-4-Training/output/qwen2-1.5b-lora-hvnb
 logging_steps: 10
 save_steps: 100
 plot_loss: true
