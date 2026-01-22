@@ -115,6 +115,34 @@ export const filesApi = {
   },
 }
 
+// Chatbot Endpoints
+export const chatApi = {
+  // Load adapter for testing
+  loadAdapter: async (sessionId: string) => {
+    const response = await api.post('/api/chat/load', {
+      session_id: sessionId,
+    })
+    return response.data
+  },
+
+  // Send message and get response
+  sendMessage: async (sessionId: string, message: string) => {
+    const response = await api.post('/api/chat/message', {
+      session_id: sessionId,
+      message,
+    })
+    return response.data
+  },
+
+  // Clear conversation history
+  clearChat: async (sessionId: string) => {
+    const response = await api.post('/api/chat/clear', {
+      session_id: sessionId,
+    })
+    return response.data
+  },
+}
+
 // Health check
 export const healthApi = {
   check: async () => {
