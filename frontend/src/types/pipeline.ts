@@ -7,6 +7,7 @@ export interface StepState {
   progress: number
   outputFiles: string[]
   errorMessage?: string
+  progressMessage?: string
 }
 
 export interface SessionState {

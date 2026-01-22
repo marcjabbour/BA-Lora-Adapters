@@ -28,7 +28,7 @@ export const useWebSocket = (sessionId: string | null) => {
           switch (data.type) {
             case 'progress':
               if (data.step_id && data.progress !== undefined) {
-                updateStepProgress(data.step_id, data.progress)
+                updateStepProgress(data.step_id, data.progress, data.message)
               }
               break
 

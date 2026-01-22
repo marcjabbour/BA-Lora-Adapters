@@ -10,4 +10,37 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  background-color: #1a1a1a;
+}
+
+/* Animated spinning border for running steps */
+@keyframes spin-border {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+.animate-pulse-border {
+  position: relative;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  background-image: linear-gradient(white, white),
+                    linear-gradient(90deg,
+                      #10b981 0%,
+                      #3b82f6 25%,
+                      #10b981 50%,
+                      #3b82f6 75%,
+                      #10b981 100%);
+  background-origin: border-box;
+  background-size: 200% 100%;
+  animation: spin-border 2s linear infinite;
+}
+
+/* Completed step styling - bold green border with green hue */
+.completed-step {
+  border: 3px solid #10b981;
+  background-color: rgba(16, 185, 129, 0.05);
 }

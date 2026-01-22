@@ -23,12 +23,10 @@ const LLM_MODELS = {
     {
       value: 'gpt-4o',
       label: 'GPT-4o (Recommended)',
-      cost: '~$5-10 per run',
     },
     {
       value: 'gpt-4o-mini',
       label: 'GPT-4o Mini',
-      cost: '~$1-3 per run',
     },
   ],
 }
@@ -53,10 +51,6 @@ export const Step2Config = ({
     onConfigChange({ provider, model, rewriteThreshold: newThreshold })
   }
 
-  const selectedModelData = LLM_MODELS[provider as keyof typeof LLM_MODELS].find(
-    (m) => m.value === model
-  )
-
   return (
     <div className="space-y-6 p-4 bg-gray-50 rounded-lg">
       {/* Model Selection */}
@@ -76,9 +70,6 @@ export const Step2Config = ({
             ))}
           </SelectContent>
         </Select>
-        <p className="text-xs text-gray-500 mt-1">
-          {selectedModelData?.cost}
-        </p>
       </div>
 
       {/* Rewrite Threshold Slider */}

@@ -51,12 +51,19 @@ export const StepCard = ({ stepId, step }: StepCardProps) => {
   const handleUpload = async (files: FileList) => {
     setUploading(true)
     try {
+      // Upload files and create session
       const response = await pipelineApi.uploadFiles(files)
-      usePipelineStore.getState().setSessionId(response.session_id)
-      console.log('Files uploaded, session created:', response.session_id)
+      const newSessionId = response.session_id
+      usePipelineStore.getState().setSessionId(newSessionId)
+      console.log('Files uploaded, session created:', newSessionId)
+
+      // Automatically start Step 1 after upload
+      console.log('Starting Step 1 automatically...')
+      await pipelineApi.executeStep(newSessionId, 1)
+      console.log('Step 1 execution started')
     } catch (error) {
-      console.error('Upload failed:', error)
-      alert('Failed to upload files. Please try again.')
+      console.error('Upload or execution failed:', error)
+      alert('Failed to upload files or start Step 1. Please try again.')
     } finally {
       setUploading(false)
     }
@@ -104,7 +111,9 @@ export const StepCard = ({ stepId, step }: StepCardProps) => {
 
   return (
     <>
-      <Card className="hover:shadow-lg transition-shadow">
+      <Card className={`hover:shadow-lg transition-shadow relative ${
+        step.status === 'running' ? 'animate-pulse-border' : ''
+      } ${step.status === 'completed' ? 'completed-step' : ''}`}>
         <CardHeader className="flex flex-row items-center justify-between">
         <div className="flex items-center gap-4">
           <StatusIndicator status={step.status} />
@@ -119,7 +128,8 @@ export const StepCard = ({ stepId, step }: StepCardProps) => {
         </div>
 
         <div className="flex gap-2">
-          {canRun && stepId !== 1 && (
+          {/* Show Run Step button for all steps when they can run */}
+          {canRun && (
             <Button onClick={handleExecute} disabled={executing}>
               {executing ? 'Starting...' : 'Run Step'}
             </Button>
@@ -166,7 +176,10 @@ export const StepCard = ({ stepId, step }: StepCardProps) => {
         <CardContent>
           <ProgressBar progress={step.progress} />
           <p className="text-sm text-gray-500 mt-2">
-            {step.progress.toFixed(1)}% complete
+            {stepId === 2 && step.progressMessage
+              ? step.progressMessage
+              : `${step.progress.toFixed(1)}% complete`
+            }
           </p>
         </CardContent>
       )}

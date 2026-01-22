@@ -2,7 +2,6 @@ import { usePipelineStore } from '../../store/pipelineStore'
 import { useWebSocket } from '../../hooks/useWebSocket'
 import { StepCard } from './StepCard'
 import { AnimatedWire } from './AnimatedWire'
-import { SessionWarning } from '../layout/SessionWarning'
 import { Button } from '../ui/button'
 
 export const PipelineVisualizer = () => {
@@ -31,9 +30,6 @@ export const PipelineVisualizer = () => {
           Reset Pipeline
         </Button>
       </div>
-
-      {/* Warning Banner */}
-      {sessionId && <SessionWarning />}
 
       {/* Session Info */}
       {sessionId && (

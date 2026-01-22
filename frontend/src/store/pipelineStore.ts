@@ -11,7 +11,7 @@ interface PipelineStore {
   setSessionId: (id: string) => void
   setAutoMode: (enabled: boolean) => void
   updateStepStatus: (stepId: number, status: StepStatus) => void
-  updateStepProgress: (stepId: number, progress: number) => void
+  updateStepProgress: (stepId: number, progress: number, message?: string) => void
   updateStepOutputFiles: (stepId: number, files: string[]) => void
   setStepError: (stepId: number, error: string) => void
   resetPipeline: () => void
@@ -44,10 +44,10 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
     currentStep: status === 'running' ? stepId : state.currentStep
   })),
 
-  updateStepProgress: (stepId: number, progress: number) => set((state) => ({
+  updateStepProgress: (stepId: number, progress: number, message?: string) => set((state) => ({
     steps: {
       ...state.steps,
-      [stepId]: { ...state.steps[stepId], progress }
+      [stepId]: { ...state.steps[stepId], progress, progressMessage: message }
     }
   })),
 
