@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import files, pipeline
+from app.api.routes import files, pipeline, chat
 from app.config import settings
 from app.core.websocket_manager import ws_manager
 from app.services.temp_manager import temp_manager
@@ -73,6 +73,7 @@ app.add_middleware(
 # Include routers
 app.include_router(pipeline.router)
 app.include_router(files.router)
+app.include_router(chat.router)
 
 
 @app.get("/")
