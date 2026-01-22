@@ -32,7 +32,7 @@ data/Step-1-Sanitization/output/*
 data/Step-2-Tagging/output/*
 data/Step-2-Tagging/checkpoints/*
 data/Step-3-Exporting/output/*
-data/Step-4-Training/*
+data/Step-4-Training/output/*/checkpoint-*/
 data/Step-5-Serving/*
 !data/**/.gitkeep
 

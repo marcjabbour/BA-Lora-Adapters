@@ -362,6 +362,47 @@ python scripts/export_to_sharegpt.py \
 
 ---
 
+### Step 4: Training (`scripts/train_lora.py`)
+
+**Status:** ✅ Implemented
+
+**Input**: ShareGPT dataset from Step 3 (`data/Step-3-Exporting/output/sharegpt_dataset.json`)
+
+**Operations**:
+1. Register dataset with LlamaFactory (`configs/llamafactory/dataset_info.json`)
+2. Configure LoRA training parameters (rank 8, alpha 16)
+3. Train on Qwen2-1.5B-Instruct (local CPU proof-of-concept)
+4. Save adapter to `data/Step-4-Training/output/`
+
+**CLI**:
+```bash
+python scripts/train_lora.py \
+  --config configs/llamafactory/train_lora.yaml \
+  --dataset-info configs/llamafactory/dataset_info.json
+```
+
+**Testing Trained Adapter**:
+```bash
+python scripts/test_adapter.py \
+  --adapter-path data/Step-4-Training/output/qwen2-1.5b-lora-hvnb \
+  --prompt "hi i would like to check my account balance"
+```
+
+**Training Configuration** (`configs/llamafactory/train_lora.yaml`):
+- Model: Qwen/Qwen2-1.5B-Instruct
+- LoRA rank: 8, alpha: 16
+- Batch size: 1 (CPU), gradient accumulation: 4
+- Epochs: 3, Learning rate: 5e-5
+- No validation split (data already held out)
+
+**Notes**:
+- Training time: 2-6 hours on CPU (16GB+ RAM)
+- Model download: ~3GB (cached to `~/.cache/huggingface/`)
+- Adapter size: ~20-50MB
+- Checkpoints saved every 100 steps
+
+---
+
 ## Files to Create
 
 | File | Purpose | Status |
@@ -377,7 +418,11 @@ python scripts/export_to_sharegpt.py \
 | `src/utils/logging_utils.py` | Logging configuration | ✅ |
 | `scripts/sanitize_transcripts.py` | Step 1 CLI | ✅ |
 | `scripts/tag_transcripts.py` | Step 2 CLI | ✅ |
-| `scripts/export_to_sharegpt.py` | Step 3 CLI | ⬜ |
+| `scripts/export_to_sharegpt.py` | Step 3 CLI | ✅ |
+| `configs/llamafactory/dataset_info.json` | LlamaFactory dataset registration | ✅ |
+| `configs/llamafactory/train_lora.yaml` | LoRA training configuration | ✅ |
+| `scripts/train_lora.py` | Step 4 CLI | ✅ |
+| `scripts/test_adapter.py` | Test trained adapter | ✅ |
 
 ---
 
@@ -386,7 +431,8 @@ python scripts/export_to_sharegpt.py \
 1. **Step 1**: Run with sample raw transcript, verify output matches Sanitized Transcript Data Model
 2. **Step 2**: Run with sanitized transcript, verify LLM calls work and output matches Tagged Data Model
 3. **Step 3**: Run with tagged transcript, verify ShareGPT format is correct for Llama-Factory
-4. **End-to-end**: Process a sample file through all 3 steps, validate final output
+4. **Step 4**: Train LoRA adapter, verify adapter files created and inference works
+5. **End-to-end**: Process a sample file through all 4 steps, validate trained adapter
 
 ---
 
