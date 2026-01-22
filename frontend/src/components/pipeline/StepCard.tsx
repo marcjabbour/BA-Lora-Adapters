@@ -12,6 +12,7 @@ import { Step1Upload } from '../steps/Step1Upload'
 import { Step2Config, type Step2ConfigData } from '../steps/Step2Config'
 import { Step3Preview } from '../steps/Step3Preview'
 import { Step4Training, type Step4ConfigData } from '../steps/Step4Training'
+import { FilePreview } from '../shared/FilePreview'
 
 interface StepCardProps {
   stepId: number
@@ -33,6 +34,7 @@ export const StepCard = ({ stepId, step }: StepCardProps) => {
   const { sessionId, steps } = usePipelineStore()
   const [uploading, setUploading] = useState(false)
   const [executing, setExecuting] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
   const [step2Config, setStep2Config] = useState<Step2ConfigData>({
     provider: 'openai',
     model: 'gpt-4o',
@@ -84,18 +86,8 @@ export const StepCard = ({ stepId, step }: StepCardProps) => {
     }
   }
 
-  const handlePreview = async () => {
-    if (!sessionId) return
-
-    try {
-      const data = await filesApi.previewStep(sessionId, stepId)
-      console.log('Preview data:', data)
-      // For now, just log to console. We'll add a modal later
-      alert('Preview data logged to console')
-    } catch (error) {
-      console.error('Preview failed:', error)
-      alert('Failed to preview files. Please try again.')
-    }
+  const handlePreview = () => {
+    setPreviewOpen(true)
   }
 
   const handleDownloadAdapter = async () => {
@@ -111,8 +103,9 @@ export const StepCard = ({ stepId, step }: StepCardProps) => {
   }
 
   return (
-    <Card className="hover:shadow-lg transition-shadow">
-      <CardHeader className="flex flex-row items-center justify-between">
+    <>
+      <Card className="hover:shadow-lg transition-shadow">
+        <CardHeader className="flex flex-row items-center justify-between">
         <div className="flex items-center gap-4">
           <StatusIndicator status={step.status} />
           <div>
@@ -185,6 +178,17 @@ export const StepCard = ({ stepId, step }: StepCardProps) => {
           </Alert>
         </CardContent>
       )}
-    </Card>
+      </Card>
+
+      {/* File Preview Modal */}
+      {sessionId && (
+        <FilePreview
+          stepId={stepId}
+          sessionId={sessionId}
+          isOpen={previewOpen}
+          onClose={() => setPreviewOpen(false)}
+        />
+      )}
+    </>
   )
 }
