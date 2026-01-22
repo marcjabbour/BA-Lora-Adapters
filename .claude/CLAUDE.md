@@ -81,7 +81,7 @@ We're building this step-by-step in order:
 | 1 | Sanitization | ✅ Complete |
 | 2 | Tagging (LLM) | ✅ Complete |
 | 3 | Exporting (ShareGPT) | ✅ Complete |
-| 4 | Training (Llama-Factory) | ⬜ Future |
+| 4 | Training (Llama-Factory) | ✅ Complete |
 | 5 | Serving (vLLM) | ⬜ Future |
 
 Update this table as steps are completed.
