@@ -41,12 +41,18 @@ export interface WebSocketMessage {
 }
 
 export interface FilePreviewResponse {
-  files: Array<{
+  files?: Array<{
     filename: string
     content: any
   }>
   totalRecords?: number
   sample?: any
+  trainingMetrics?: {
+    lossHistory: Array<{ step: number; loss: number }>
+    finalLoss: number
+    epochs: number
+    totalSteps: number
+  }
   adapterSizeMb?: number
 }
 
