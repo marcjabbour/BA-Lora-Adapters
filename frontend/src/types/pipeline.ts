@@ -17,13 +17,16 @@ export interface SessionState {
 }
 
 export interface Step2Config {
-  llmProvider: string
+  provider: string
   model: string
   rewriteThreshold: number
 }
 
 export interface Step4Config {
-  modelName: string
+  baseModel: string
+  epochs?: number
+  batchSize?: number
+  learningRate?: number
 }
 
 export interface WebSocketMessage {

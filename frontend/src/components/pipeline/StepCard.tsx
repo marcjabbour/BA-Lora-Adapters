@@ -3,11 +3,15 @@ import { Button } from '../ui/button'
 import { StatusIndicator } from '../shared/StatusIndicator'
 import { ProgressBar } from '../shared/ProgressBar'
 import { Alert, AlertDescription } from '../ui/alert'
-import { Download, Eye, Upload } from 'lucide-react'
+import { Download, Eye } from 'lucide-react'
 import type { StepState } from '../../types/pipeline'
 import { usePipelineStore } from '../../store/pipelineStore'
 import { pipelineApi, filesApi } from '../../services/api'
 import { useState } from 'react'
+import { Step1Upload } from '../steps/Step1Upload'
+import { Step2Config, type Step2ConfigData } from '../steps/Step2Config'
+import { Step3Preview } from '../steps/Step3Preview'
+import { Step4Training, type Step4ConfigData } from '../steps/Step4Training'
 
 interface StepCardProps {
   stepId: number
@@ -29,14 +33,20 @@ export const StepCard = ({ stepId, step }: StepCardProps) => {
   const { sessionId, steps } = usePipelineStore()
   const [uploading, setUploading] = useState(false)
   const [executing, setExecuting] = useState(false)
+  const [step2Config, setStep2Config] = useState<Step2ConfigData>({
+    provider: 'openai',
+    model: 'gpt-4o',
+    rewriteThreshold: 6,
+  })
+  const [step4Config, setStep4Config] = useState<Step4ConfigData>({
+    baseModel: 'Qwen/Qwen2-1.5B-Instruct',
+  })
 
   // Check if previous step is completed (for steps 2-5)
   const previousStepCompleted = stepId === 1 || steps[stepId - 1]?.status === 'completed'
   const canRun = step.status === 'pending' && previousStepCompleted && sessionId
 
-  const handleUpload = async (files: FileList | null) => {
-    if (!files || files.length === 0) return
-
+  const handleUpload = async (files: FileList) => {
     setUploading(true)
     try {
       const response = await pipelineApi.uploadFiles(files)
@@ -55,7 +65,16 @@ export const StepCard = ({ stepId, step }: StepCardProps) => {
 
     setExecuting(true)
     try {
-      await pipelineApi.executeStep(sessionId, stepId)
+      // Pass configuration for step 2
+      if (stepId === 2) {
+        await pipelineApi.executeStep(sessionId, stepId, step2Config)
+      }
+      // Pass configuration for step 4
+      else if (stepId === 4) {
+        await pipelineApi.executeStep(sessionId, stepId, step4Config)
+      } else {
+        await pipelineApi.executeStep(sessionId, stepId)
+      }
       console.log(`Step ${stepId} execution started`)
     } catch (error) {
       console.error(`Step ${stepId} execution failed:`, error)
@@ -107,26 +126,6 @@ export const StepCard = ({ stepId, step }: StepCardProps) => {
         </div>
 
         <div className="flex gap-2">
-          {stepId === 1 && !sessionId && (
-            <label htmlFor="file-upload" className="cursor-pointer">
-              <input
-                id="file-upload"
-                type="file"
-                multiple
-                accept=".json"
-                onChange={(e) => handleUpload(e.target.files)}
-                className="hidden"
-                disabled={uploading}
-              />
-              <Button disabled={uploading} asChild>
-                <span>
-                  <Upload className="h-4 w-4 mr-2" />
-                  {uploading ? 'Uploading...' : 'Upload Files'}
-                </span>
-              </Button>
-            </label>
-          )}
-
           {canRun && stepId !== 1 && (
             <Button onClick={handleExecute} disabled={executing}>
               {executing ? 'Starting...' : 'Run Step'}
@@ -147,6 +146,28 @@ export const StepCard = ({ stepId, step }: StepCardProps) => {
           )}
         </div>
       </CardHeader>
+
+      {/* Step-specific configuration UI */}
+      <CardContent>
+        {stepId === 1 && (
+          <Step1Upload onUpload={handleUpload} isUploading={uploading} />
+        )}
+        {stepId === 2 && (
+          <Step2Config
+            onConfigChange={setStep2Config}
+            defaultConfig={step2Config}
+          />
+        )}
+        {stepId === 3 && <Step3Preview />}
+        {stepId === 4 && (
+          <Step4Training
+            onConfigChange={setStep4Config}
+            onDownload={handleDownloadAdapter}
+            isCompleted={step.status === 'completed'}
+            defaultConfig={step4Config}
+          />
+        )}
+      </CardContent>
 
       {step.status === 'running' && (
         <CardContent>
