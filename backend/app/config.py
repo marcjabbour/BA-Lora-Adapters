@@ -4,7 +4,8 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from pydantic_settings import BaseSettings
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -16,18 +17,15 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
 
-    # CORS settings
-    cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
+    # CORS settings - store as string from env, parse in validator
+    cors_origins: str = Field(default="http://localhost:5173,http://localhost:5174,http://localhost:3000")
 
     # Session settings
     session_cleanup_hours: int = 24
     temp_base_dir: Path = Path("/tmp")
 
     # Project root (2 levels up from this file)
-    project_root: Path = Path(__file__).parent.parent.parent
-
-    # Paths to pipeline scripts
-    scripts_dir: Path = project_root / "scripts"
+    project_root: Path = Field(default_factory=lambda: Path(__file__).parent.parent.parent)
 
     # File upload limits
     max_upload_size_mb: int = 500
@@ -36,11 +34,22 @@ class Settings(BaseSettings):
     openai_api_key: Optional[str] = None
     anthropic_api_key: Optional[str] = None
 
-    class Config:
-        """Pydantic settings config."""
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+    )
+
+    @property
+    def scripts_dir(self) -> Path:
+        """Path to pipeline scripts directory."""
+        return self.project_root / "scripts"
+
+    def get_cors_origins_list(self) -> list[str]:
+        """Get CORS origins as a list."""
+        if isinstance(self.cors_origins, str):
+            return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+        return self.cors_origins
 
 
 # Global settings instance
