@@ -29,6 +29,8 @@ class PipelineExecutor:
             step_id: Step number (1-4)
             config: Optional step configuration
         """
+        print(f"⚙️  [Step {step_id}] Starting execution for session {session.session_id}")
+
         # Update step status to running
         step = session.steps[step_id]
         step.status = StepStatus.RUNNING
@@ -36,6 +38,7 @@ class PipelineExecutor:
         step.error_message = None
 
         await ws_manager.broadcast_status(session.session_id, step_id, StepStatus.RUNNING.value)
+        print(f"📡 [Step {step_id}] Broadcasted RUNNING status")
 
         try:
             # Execute the appropriate step
@@ -55,6 +58,7 @@ class PipelineExecutor:
             step.progress_percent = 100.0
             await ws_manager.broadcast_status(session.session_id, step_id, StepStatus.COMPLETED.value)
             await ws_manager.broadcast_progress(session.session_id, step_id, 100.0, "Completed!")
+            print(f"✅ [Step {step_id}] Completed successfully")
 
         except Exception as e:
             # Mark as failed
@@ -63,6 +67,7 @@ class PipelineExecutor:
             step.error_message = error_msg
             await ws_manager.broadcast_status(session.session_id, step_id, StepStatus.FAILED.value)
             await ws_manager.broadcast_error(session.session_id, step_id, error_msg)
+            print(f"❌ [Step {step_id}] Failed with error: {error_msg}")
             raise
 
     async def _execute_step_1(self, session: SessionState):
@@ -87,6 +92,12 @@ class PipelineExecutor:
 
     async def _execute_step_2(self, session: SessionState, config: Optional[dict]):
         """Execute Step 2: LLM Tagging."""
+        # Check if API key is set
+        if not settings.openai_api_key:
+            raise ValueError(
+                "OpenAI API key not set. Please add OPENAI_API_KEY to backend/.env file."
+            )
+
         # Parse config
         step_config = Step2Config(**(config or {}))
 
@@ -96,6 +107,11 @@ class PipelineExecutor:
         # Set environment variables
         env = os.environ.copy()
         env["REWRITE_THRESHOLD"] = str(step_config.rewrite_threshold)
+        env["OPENAI_API_KEY"] = settings.openai_api_key
+
+        # Use absolute paths to config and prompt files
+        config_path = settings.project_root / "configs" / "llm_config.yaml"
+        prompt_path = settings.project_root / "prompts" / "tagging" / "tagging_prompt.txt"
 
         cmd = [
             "python",
@@ -104,6 +120,8 @@ class PipelineExecutor:
             "--output", str(output_dir),
             "--provider", step_config.llm_provider,
             "--model", step_config.model,
+            "--config", str(config_path),
+            "--prompt", str(prompt_path),
             "--verbose"
         ]
 
@@ -138,23 +156,86 @@ class PipelineExecutor:
 
     async def _execute_step_4(self, session: SessionState, config: Optional[dict]):
         """Execute Step 4: Training with LlamaFactory."""
+        import yaml
+        import shutil
+        import json
+
         # Parse config
         step_config = Step4Config(**(config or {}))
 
         input_file = temp_manager.get_step_output_dir(session, 3) / "train.json"
         output_dir = temp_manager.get_step_output_dir(session, 4)
 
-        # Note: This is a placeholder - actual LlamaFactory integration would go here
-        # For now, we'll create a simple training script call
+        # Create session-specific config directory
+        session_config_dir = session.temp_dir / "configs"
+        session_config_dir.mkdir(exist_ok=True)
+
+        # Copy train.json to session config dir (as sharegpt_dataset.json)
+        dataset_file = session_config_dir / "sharegpt_dataset.json"
+        shutil.copy(input_file, dataset_file)
+
+        # Create dataset_info.json in session config dir
+        dataset_info = {
+            "hvnb_transcripts": {
+                "file_name": "sharegpt_dataset.json",
+                "formatting": "sharegpt",
+                "columns": {
+                    "messages": "conversations"
+                },
+                "tags": {
+                    "role_tag": "from",
+                    "content_tag": "value",
+                    "user_tag": "human",
+                    "assistant_tag": "gpt"
+                }
+            }
+        }
+        dataset_info_file = session_config_dir / "dataset_info.json"
+        with open(dataset_info_file, "w") as f:
+            json.dump(dataset_info, f, indent=2)
+
+        # Create session-specific training config
+        train_config = {
+            "model_name_or_path": step_config.base_model,
+            "stage": "sft",
+            "do_train": True,
+            "finetuning_type": "lora",
+            "lora_target": "all",
+            "lora_rank": 8,
+            "lora_alpha": 16,
+            "dataset": "hvnb_transcripts",
+            "dataset_dir": str(session_config_dir),
+            "template": "qwen" if "qwen" in step_config.base_model.lower() else "default",
+            "cutoff_len": 2048,
+            "max_samples": 500,
+            "overwrite_cache": True,
+            "preprocessing_num_workers": 4,
+            "output_dir": str(output_dir),
+            "logging_steps": 10,
+            "save_steps": 100,
+            "plot_loss": True,
+            "overwrite_output_dir": True,
+            "per_device_train_batch_size": step_config.batch_size,
+            "gradient_accumulation_steps": 4,
+            "learning_rate": step_config.learning_rate,
+            "num_train_epochs": float(step_config.epochs),
+            "lr_scheduler_type": "cosine",
+            "warmup_ratio": 0.1,
+            "bf16": False,
+            "val_size": 0.0,
+            "eval_strategy": "no"
+        }
+
+        train_config_file = session_config_dir / "train_lora.yaml"
+        with open(train_config_file, "w") as f:
+            yaml.dump(train_config, f, default_flow_style=False)
+
+        # Run training script
         cmd = [
             "python",
             str(settings.scripts_dir / "train_lora.py"),
-            "--data", str(input_file),
-            "--output", str(output_dir),
-            "--model", step_config.base_model,
-            "--epochs", str(step_config.epochs),
-            "--batch-size", str(step_config.batch_size),
-            "--learning-rate", str(step_config.learning_rate),
+            "--config", str(train_config_file),
+            "--dataset-info", str(dataset_info_file),
             "--verbose"
         ]
 
@@ -195,6 +276,7 @@ class PipelineExecutor:
             env=env or os.environ.copy()
         )
 
+        output_lines = []
         while True:
             line_bytes = await process.stdout.readline()
             if not line_bytes:
@@ -202,6 +284,9 @@ class PipelineExecutor:
 
             line = line_bytes.decode("utf-8").strip()
             if line:
+                output_lines.append(line)
+                # Print to console for debugging
+                print(f"[Step {step_id}] {line}")
                 # Broadcast log
                 await ws_manager.broadcast_log(session_id, step_id, line)
                 yield line
@@ -210,7 +295,13 @@ class PipelineExecutor:
         await process.wait()
 
         if process.returncode != 0:
-            raise RuntimeError(f"Step {step_id} failed with exit code {process.returncode}")
+            # Show last few lines of output for debugging
+            error_context = "\n".join(output_lines[-10:]) if output_lines else "No output"
+            print(f"❌ [Step {step_id}] Process failed. Last output:\n{error_context}")
+            raise RuntimeError(
+                f"Step {step_id} failed with exit code {process.returncode}. "
+                f"Last output: {output_lines[-1] if output_lines else 'No output'}"
+            )
 
     def _parse_progress_generic(self, line: str) -> Optional[float]:
         """

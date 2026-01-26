@@ -75,6 +75,31 @@ class FileHandler:
         if not output_dir.exists():
             return {"files": [], "total_files": 0}
 
+        # Step 3: ShareGPT format - special handling
+        if step_id == 3:
+            train_json = output_dir / "train.json"
+            if train_json.exists():
+                try:
+                    with open(train_json, "r") as f:
+                        content = json.load(f)
+                        total_records = len(content) if isinstance(content, list) else 0
+                        sample = content[0] if isinstance(content, list) and len(content) > 0 else None
+                        return {
+                            "step_id": step_id,
+                            "totalRecords": total_records,
+                            "sample": sample
+                        }
+                except Exception as e:
+                    return {
+                        "step_id": step_id,
+                        "error": f"Failed to load train.json: {str(e)}"
+                    }
+            return {
+                "step_id": step_id,
+                "error": "train.json not found"
+            }
+
+        # Steps 1, 2: Multiple JSON files
         # Get all JSON files
         json_files = list(output_dir.glob("*.json"))
         total_files = len(json_files)
