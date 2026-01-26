@@ -77,10 +77,10 @@ class FileHandler:
 
         # Step 3: ShareGPT format - special handling
         if step_id == 3:
-            train_json = output_dir / "train.json"
-            if train_json.exists():
+            sharegpt_file = output_dir / "sharegpt_dataset.json"
+            if sharegpt_file.exists():
                 try:
-                    with open(train_json, "r") as f:
+                    with open(sharegpt_file, "r") as f:
                         content = json.load(f)
                         total_records = len(content) if isinstance(content, list) else 0
                         sample = content[0] if isinstance(content, list) and len(content) > 0 else None
@@ -92,11 +92,11 @@ class FileHandler:
                 except Exception as e:
                     return {
                         "step_id": step_id,
-                        "error": f"Failed to load train.json: {str(e)}"
+                        "error": f"Failed to load sharegpt_dataset.json: {str(e)}"
                     }
             return {
                 "step_id": step_id,
-                "error": "train.json not found"
+                "error": "sharegpt_dataset.json not found"
             }
 
         # Steps 1, 2: Multiple JSON files

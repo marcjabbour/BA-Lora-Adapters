@@ -143,7 +143,7 @@ class PipelineExecutor:
             "python",
             str(settings.scripts_dir / "export_to_sharegpt.py"),
             "--input", str(input_dir),
-            "--output", str(output_dir / "train.json"),
+            "--output", str(output_dir),
             "--verbose"
         ]
 
@@ -163,14 +163,14 @@ class PipelineExecutor:
         # Parse config
         step_config = Step4Config(**(config or {}))
 
-        input_file = temp_manager.get_step_output_dir(session, 3) / "train.json"
+        input_file = temp_manager.get_step_output_dir(session, 3) / "sharegpt_dataset.json"
         output_dir = temp_manager.get_step_output_dir(session, 4)
 
         # Create session-specific config directory
         session_config_dir = session.temp_dir / "configs"
         session_config_dir.mkdir(exist_ok=True)
 
-        # Copy train.json to session config dir (as sharegpt_dataset.json)
+        # Copy sharegpt_dataset.json to session config dir
         dataset_file = session_config_dir / "sharegpt_dataset.json"
         shutil.copy(input_file, dataset_file)
 

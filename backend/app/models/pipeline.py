@@ -43,8 +43,13 @@ class ToggleAutoModeRequest(BaseModel):
 class FilePreviewResponse(BaseModel):
     """Response with file preview data."""
     step_id: int
-    files: List[Dict[str, Any]]
-    total_files: int
+    files: Optional[List[Dict[str, Any]]] = None
+    total_files: Optional[int] = None
+    totalRecords: Optional[int] = None  # For Step 3 ShareGPT format
+    sample: Optional[Dict[str, Any]] = None  # For Step 3 ShareGPT format
+    error: Optional[str] = None  # For error cases
+    trainingMetrics: Optional[Dict[str, Any]] = None  # For Step 4 training metrics
+    adapterSizeMb: Optional[float] = None  # For Step 4 adapter size
 
 
 class ChatLoadRequest(BaseModel):
