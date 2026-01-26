@@ -1,4 +1,4 @@
-export type StepStatus = 'pending' | 'running' | 'completed' | 'failed'
+export type StepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped'
 
 export interface StepState {
   stepId: number

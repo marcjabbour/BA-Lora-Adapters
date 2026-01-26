@@ -27,6 +27,21 @@ export const pipelineApi = {
     return response.data
   },
 
+  // Upload files directly to a specific step
+  uploadFilesToStep: async (files: FileList, stepId: number) => {
+    const formData = new FormData()
+    Array.from(files).forEach(file => {
+      formData.append('files', file)
+    })
+
+    const response = await api.post(`/api/pipeline/upload/step/${stepId}`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
+    return response.data
+  },
+
   // Execute a specific step
   executeStep: async (sessionId: string, stepId: number, config?: Step2Config | Step4Config) => {
     const response = await api.post(`/api/pipeline/step/${stepId}`, {

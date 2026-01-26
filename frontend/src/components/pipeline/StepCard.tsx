@@ -13,6 +13,7 @@ import { Step2Config, type Step2ConfigData } from '../steps/Step2Config'
 import { Step3Preview } from '../steps/Step3Preview'
 import { Step4Training, type Step4ConfigData } from '../steps/Step4Training'
 import { FilePreview } from '../shared/FilePreview'
+import { GenericFileUpload } from '../shared/GenericFileUpload'
 
 interface StepCardProps {
   stepId: number
@@ -28,6 +29,16 @@ const getStepDescription = (stepId: number): string => {
     5: 'Serve adapter with vLLM (Coming Soon)',
   }
   return descriptions[stepId] || ''
+}
+
+const getStepFileInfo = (stepId: number): { extensions: string[], description: string } => {
+  const fileInfo: Record<number, { extensions: string[], description: string }> = {
+    1: { extensions: ['.json'], description: 'Raw transcript files' },
+    2: { extensions: ['.json'], description: 'Sanitized transcript files' },
+    3: { extensions: ['.json'], description: 'Tagged transcript files' },
+    4: { extensions: ['.json'], description: 'ShareGPT format files' },
+  }
+  return fileInfo[stepId] || { extensions: ['.json'], description: 'JSON files' }
 }
 
 export const StepCard = ({ stepId, step }: StepCardProps) => {
@@ -64,6 +75,27 @@ export const StepCard = ({ stepId, step }: StepCardProps) => {
     } catch (error) {
       console.error('Upload or execution failed:', error)
       alert('Failed to upload files or start Step 1. Please try again.')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const handleUploadToStep = async (files: FileList, targetStepId: number) => {
+    setUploading(true)
+    try {
+      // Upload files directly to target step
+      const response = await pipelineApi.uploadFilesToStep(files, targetStepId)
+      const newSessionId = response.session_id
+      usePipelineStore.getState().setSessionId(newSessionId)
+      console.log(`Files uploaded to Step ${targetStepId}, session created:`, newSessionId)
+
+      // Automatically start the target step after upload
+      console.log(`Starting Step ${targetStepId} automatically...`)
+      await pipelineApi.executeStep(newSessionId, targetStepId)
+      console.log(`Step ${targetStepId} execution started`)
+    } catch (error) {
+      console.error('Upload or execution failed:', error)
+      alert(`Failed to upload files or start Step ${targetStepId}. Please try again.`)
     } finally {
       setUploading(false)
     }
@@ -113,7 +145,9 @@ export const StepCard = ({ stepId, step }: StepCardProps) => {
     <>
       <Card className={`hover:shadow-lg transition-shadow relative ${
         step.status === 'running' ? 'animate-pulse-border' : ''
-      } ${step.status === 'completed' ? 'completed-step' : ''}`}>
+      } ${step.status === 'completed' ? 'completed-step' : ''} ${
+        step.status === 'skipped' ? 'skipped-step' : ''
+      }`}>
         <CardHeader className="flex flex-row items-center justify-between">
         <div className="flex items-center gap-4">
           <StatusIndicator status={step.status} />
@@ -156,19 +190,63 @@ export const StepCard = ({ stepId, step }: StepCardProps) => {
           <Step1Upload onUpload={handleUpload} isUploading={uploading} />
         )}
         {stepId === 2 && (
-          <Step2Config
-            onConfigChange={setStep2Config}
-            defaultConfig={step2Config}
-          />
+          <div className="space-y-4">
+            {!sessionId && (
+              <div>
+                <p className="text-sm text-gray-600 mb-3">Upload sanitized files directly to skip Step 1:</p>
+                <GenericFileUpload
+                  stepId={2}
+                  acceptedExtensions={getStepFileInfo(2).extensions}
+                  description={getStepFileInfo(2).description}
+                  onUpload={handleUploadToStep}
+                  isUploading={uploading}
+                />
+              </div>
+            )}
+            <Step2Config
+              onConfigChange={setStep2Config}
+              defaultConfig={step2Config}
+            />
+          </div>
         )}
-        {stepId === 3 && <Step3Preview />}
+        {stepId === 3 && (
+          <div className="space-y-4">
+            {!sessionId && (
+              <div>
+                <p className="text-sm text-gray-600 mb-3">Upload tagged files directly to skip Steps 1-2:</p>
+                <GenericFileUpload
+                  stepId={3}
+                  acceptedExtensions={getStepFileInfo(3).extensions}
+                  description={getStepFileInfo(3).description}
+                  onUpload={handleUploadToStep}
+                  isUploading={uploading}
+                />
+              </div>
+            )}
+            <Step3Preview />
+          </div>
+        )}
         {stepId === 4 && (
-          <Step4Training
-            onConfigChange={setStep4Config}
-            onDownload={handleDownloadAdapter}
-            isCompleted={step.status === 'completed'}
-            defaultConfig={step4Config}
-          />
+          <div className="space-y-4">
+            {!sessionId && (
+              <div>
+                <p className="text-sm text-gray-600 mb-3">Upload ShareGPT files directly to skip Steps 1-3:</p>
+                <GenericFileUpload
+                  stepId={4}
+                  acceptedExtensions={getStepFileInfo(4).extensions}
+                  description={getStepFileInfo(4).description}
+                  onUpload={handleUploadToStep}
+                  isUploading={uploading}
+                />
+              </div>
+            )}
+            <Step4Training
+              onConfigChange={setStep4Config}
+              onDownload={handleDownloadAdapter}
+              isCompleted={step.status === 'completed'}
+              defaultConfig={step4Config}
+            />
+          </div>
         )}
       </CardContent>
 

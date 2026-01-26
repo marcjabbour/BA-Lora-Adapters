@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { CheckCircle2, Circle, Loader2, XCircle } from 'lucide-react'
+import { CheckCircle2, Circle, Loader2, XCircle, SkipForward } from 'lucide-react'
 import type { StepStatus } from '../../types/pipeline'
 
 interface StatusIndicatorProps {
@@ -11,7 +11,8 @@ export const StatusIndicator = ({ status }: StatusIndicatorProps) => {
     pending: { icon: Circle, color: 'text-gray-400', animate: false },
     running: { icon: Loader2, color: 'text-blue-500', animate: true },
     completed: { icon: CheckCircle2, color: 'text-green-500', animate: false },
-    failed: { icon: XCircle, color: 'text-red-500', animate: false }
+    failed: { icon: XCircle, color: 'text-red-500', animate: false },
+    skipped: { icon: SkipForward, color: 'text-gray-400', animate: false }
   }
 
   const config = statusConfig[status]

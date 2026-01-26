@@ -85,7 +85,7 @@ class WebSocketManager:
         Args:
             session_id: Session identifier
             step_id: Step number
-            status: New status (pending, running, completed, failed)
+            status: New status (pending, running, completed, failed, skipped)
         """
         payload = {
             "type": "status",

@@ -33,13 +33,55 @@ async def upload_files(files: List[UploadFile] = File(...)):
     """
     # Create new session
     session = await temp_manager.create_session()
+    print(f"📁 Created new session: {session.session_id}")
 
     # Upload files
-    count = await file_handler.upload_files(session, files)
+    count = await file_handler.upload_files(session, files, target_step=1)
+    print(f"✅ Uploaded {count} files to session {session.session_id}")
+    print(f"💡 Frontend will automatically trigger Step 1 execution.")
 
     return SessionResponse(
         session_id=session.session_id,
         message=f"Session created. Uploaded {count} files."
+    )
+
+
+@router.post("/upload/step/{step_id}", response_model=SessionResponse)
+async def upload_files_to_step(step_id: int, files: List[UploadFile] = File(...)):
+    """
+    Upload files directly to a specific step, skipping previous steps.
+
+    Args:
+        step_id: Target step number (2-4)
+        files: List of files to upload
+
+    Returns:
+        Session information
+    """
+    if step_id < 2 or step_id > 4:
+        raise HTTPException(
+            status_code=400,
+            detail="Step ID must be between 2 and 4 for direct upload"
+        )
+
+    # Create new session or get existing one
+    session = await temp_manager.create_session()
+    print(f"📁 Created new session: {session.session_id}")
+
+    # Upload files to target step
+    count = await file_handler.upload_files(session, files, target_step=step_id)
+    print(f"✅ Uploaded {count} files to step {step_id} for session {session.session_id}")
+
+    # Mark all previous steps as skipped and broadcast status
+    from app.core.websocket_manager import ws_manager
+    for prev_step_id in range(1, step_id):
+        session.steps[prev_step_id].status = StepStatus.SKIPPED
+        await ws_manager.broadcast_status(session.session_id, prev_step_id, StepStatus.SKIPPED.value)
+        print(f"⏭️  Marked Step {prev_step_id} as skipped")
+
+    return SessionResponse(
+        session_id=session.session_id,
+        message=f"Session created. Uploaded {count} files to Step {step_id}. Steps 1-{step_id-1} marked as skipped."
     )
 
 
@@ -73,16 +115,17 @@ async def execute_step(
     if step.status == StepStatus.RUNNING:
         raise HTTPException(status_code=400, detail="Step is already running")
 
-    # Check if previous step is completed (except for step 1)
+    # Check if previous step is completed or skipped (except for step 1)
     if step_id > 1:
         prev_step = session.steps.get(step_id - 1)
-        if prev_step.status != StepStatus.COMPLETED:
+        if prev_step.status not in [StepStatus.COMPLETED, StepStatus.SKIPPED]:
             raise HTTPException(
                 status_code=400,
-                detail=f"Previous step must be completed first"
+                detail=f"Previous step must be completed or skipped first"
             )
 
     # Execute step in background
+    print(f"🚀 Starting Step {step_id} execution for session {session.session_id}")
     background_tasks.add_task(
         pipeline_executor.execute_step,
         session,

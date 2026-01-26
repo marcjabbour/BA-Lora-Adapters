@@ -18,25 +18,34 @@ class FileHandler:
     async def upload_files(
         self,
         session: SessionState,
-        files: List[UploadFile]
+        files: List[UploadFile],
+        target_step: int = 1
     ) -> int:
         """
-        Upload raw transcript files to session directory.
+        Upload files to session directory for a specific step.
 
         Args:
             session: Session state
             files: List of uploaded files
+            target_step: Target step number (default: 1 for raw files)
 
         Returns:
             Number of files uploaded
         """
-        raw_dir = session.temp_dir / "raw"
-        raw_dir.mkdir(exist_ok=True)
+        # Determine target directory based on step
+        if target_step == 1:
+            target_dir = session.temp_dir / "raw"
+        else:
+            # Upload to the input directory of the target step
+            # which is the output directory of the previous step
+            target_dir = temp_manager.get_step_input_dir(session, target_step)
+
+        target_dir.mkdir(parents=True, exist_ok=True)
 
         count = 0
         for file in files:
             # Save file
-            file_path = raw_dir / file.filename
+            file_path = target_dir / file.filename
             with open(file_path, "wb") as f:
                 content = await file.read()
                 f.write(content)
