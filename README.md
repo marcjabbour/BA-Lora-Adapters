@@ -86,8 +86,17 @@ python scripts/export_to_sharegpt.py \
   --output data/Step-3-Exporting/output/
 ```
 
-### Step 4: Training (Future)
-Llama-Factory integration for LoRA adapter training.
+### Step 4: Training
+Uses Llama-Factory for LoRA adapter training:
+- Configurable training parameters (epochs, learning rate, batch size, etc.)
+- Real-time training metrics via WebSocket
+- Outputs trained LoRA adapter weights
+
+```bash
+python scripts/train_lora.py \
+  --input data/Step-3-Exporting/output/ \
+  --output data/Step-4-Training/output/
+```
 
 ### Step 5: Serving (Future)
 vLLM deployment for serving trained adapters.
@@ -119,6 +128,13 @@ BA-LoRA-Adapters/
 ```
 
 ## Setup
+
+**Requirements:** Python 3.10 - 3.13 (some dependencies may not support Python 3.14+)
+
+```bash
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 ```bash
 # Install dependencies
