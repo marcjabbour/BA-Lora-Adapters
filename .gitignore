@@ -39,6 +39,7 @@ data/Step-5-Serving/*
 # IDE
 .idea/
 .vscode/
+.claude/
 *.swp
 *.swo
 *~
